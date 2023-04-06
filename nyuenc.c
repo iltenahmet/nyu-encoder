@@ -24,16 +24,19 @@ zip nyuenc.zip Makefile *.h *.c
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <string.h>
 #include "nyuenc.h"
 
 #define INITIAL_INPUT_SIZE 100
 
-int main(int argc, char *argv[]) {
-
-	char* input = malloc(INITIAL_INPUT_SIZE * sizeof(char));
+int main(int argc, char *argv[])
+{
+	char *input = malloc(INITIAL_INPUT_SIZE * sizeof(char));
+	size_t size_allocated = INITIAL_INPUT_SIZE;
 	size_t size_needed = 0;
+	int input_last_char_idx = 0;
 
-	for (int i = 1; i <= argc; i++)
+	for (int i = 1; i < argc; i++)
 	{
 		int fd = open(argv[1], O_RDONLY);
 		if (fd == -1)
@@ -50,9 +53,10 @@ int main(int argc, char *argv[]) {
 		}
 
 		size_needed += sb.st_size;
-		if (sizeof(input) < size_needed)
+		if (size_allocated < size_needed)
 		{
 			input = realloc(input, size_needed * sizeof(char));
+			size_allocated = size_needed;
 		}
 
 		char *addr = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
@@ -61,14 +65,17 @@ int main(int argc, char *argv[]) {
 			fprintf(stderr, "Error mapping the file into memory");
 			return 1;
 		}
-
 		close(fd);
 
-		//input += addr;
-		// add addr to input in a for loop
+		// add addr to input
+		for (int j = 0; j < sb.st_size; j++)
+		{
+			input[input_last_char_idx + j] = addr[j];
+		}
+		input_last_char_idx += (int) sb.st_size;
 	}
 
-	char* output = malloc(2 * size_needed * sizeof(char));
+	char *output = malloc(2 * size_needed * sizeof(char));
 
 	//Run Length Encoding
 	char current = input[0];
@@ -81,14 +88,18 @@ int main(int argc, char *argv[]) {
 			count++;
 			continue;
 		}
-		output_index += sprintf(&output[output_index], "%c%c", current, (char) count);
+
+		output[output_index++] = current;
+		output[output_index++] = (char)count;
 		current = input[i];
 		count = 1;
 	}
-	output_index += sprintf(&output[output_index], "%c%c", current, (char) count);
+	output[output_index++] = current;
+	output[output_index++] = (char)count;
+
 	write(STDOUT_FILENO, output, output_index);
 
 	free(input);
-	free(output);
+    free(output);
 	return 0;
 }
